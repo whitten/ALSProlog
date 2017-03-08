@@ -103,6 +103,27 @@ read_pxml_term(['<', InTag,'>','<', InTag,'>' | Tokens], Term, RestTokens)
 
 /*---------------------------------------------------------------------
  *--------------------------------------------------------------------*/
+read_pxml_term(['<', InTag | Tokens], Term, ['<' | RestTokens])
+	:-
+	make_lc_sym(InTag, Tag),
+	Tag = meta,
+	!,
+	read_pxml_terms_to(Tokens, '<', Features, RestTokens),
+	Term  =.. [Tag, Features, []].
+
+read_pxml_term(['<', InTag | Tokens], Term, ['<' | RestTokens])
+	:-
+	make_lc_sym(InTag, Tag),
+	Tag = style,
+	parse_style,
+	!,
+	read_pxml_eqs_to(Tokens, '>', Features, InterTokens),
+	read_style_terms_to(InterTokens, Styles, RestTokens),
+	Term  =.. [style, Features, Styles].
+
+
+
+
 read_pxml_term(['<', InTag | Tokens], Term, RestTokens)
 	:-
 	make_lc_sym(InTag, Tag),
@@ -197,7 +218,15 @@ read_pxml_comment([Token | Tokens], [Token | Features], RestTokens)
 	read_pxml_comment(Tokens, Features, RestTokens).
 
 
+/*---------------------------------------------------------------------
+ *--------------------------------------------------------------------*/
 read_to_close_html([], [], _, []).
+read_to_close_html(['<','=' | Tokens], [], Tag, Tokens)
+	:-!,
+	read_to_close_html(Tokens, [], Tag, Tokens).
+
+read_to_close_html(['/','>' | Tokens], [], Tag, Tokens)
+	:-!.
 read_to_close_html(['/','>' | Tokens], [], Tag, Tokens)
 	:-!.
 read_to_close_html(['<','/',InTag0,'>','<','/',InTag1,'>' | Tokens], 
@@ -254,6 +283,107 @@ read_to_close_html(Tokens, [Term | SubTerms], Tag, RestTokens)
 	read_pxml_term(Tokens, Term, InterTokens),
 	read_to_close_html(InterTokens, SubTerms, Tag, RestTokens).
 
+/*---------------------------------------------------------------------
+	Handle <style>
+ *--------------------------------------------------------------------*/
+	%% Option to control whether <style> is parsed:
+export do_parse_style/0.
+export no_parse_style/0.
+do_parse_style
+	:-
+	parse_style, !.
+do_parse_style
+	:-
+	assert(parse_style).
+no_parse_style
+	:-
+	parse_style, 
+	!,
+	retract(parse_style).
+no_parse_style.
+
+:-dynamic(parse_style/0).
+%parse_style.
+
+read_style_terms_to(['<', '/', style, '>' |  RestTokens], [], RestTokens)
+	:-!.
+
+read_style_terms_to([=,'@media' | Tokens], [MediaEntry], RestTokens)
+	:-!,
+	read_style_body_entries_to([=,'@media' | Tokens], '}', MediaEntry, InterTokens),
+	read_to_close_html(InterTokens, SubTerms, Tag, RestTokens).
+
+read_style_terms_to(Tokens, [Style | Styles], RestTokens)
+	:-
+	read_style_term(Tokens, Style, InterTokens),
+	read_style_terms_to(InterTokens, Styles, RestTokens).
+
+read_style_term([= | Tokens], Style, RestTokens)
+	:-
+	read_style_term(Tokens, Style, RestTokens).
+
+read_style_term(Tokens, Style, RestTokens)
+	:-
+	read_style_heads_list(Tokens, StyleHeads, InterTokens),		% will consume {
+	read_style_body_list(InterTokens, StyleBodyList, RestTokens),	% will consume }
+	Style = style(StyleHeads, StyleBodyList).
+	
+read_style_heads_list(Tokens, StyleHeads, RestTokens)
+	:-
+	read_pxml_terms_to(Tokens, '{', StyleHeads, RestTokens).
+
+read_style_body_list(Tokens, StyleBodyList, RestTokens)	% will consume }
+	:-
+	read_style_body_entries_to(Tokens, '}', StyleBodyList, RestTokens).
+
+
+read_media_kind(['(' | Tokens], [], Tokens)
+	:-!.
+
+read_media_kind([Token | InterTokens], [Token | RestMediaKinds], RestTokens)
+	:-
+	read_media_kind(InterTokens, RestMediaKinds, RestTokens).
+
+read_media_size([')', '{' | RestTokens], [], RestTokens)		% consumes ) and {
+	:-!.
+
+read_media_size([Tag, ':', Value | InterTokens], [size(SizeTag, Value) | RestMediaSize],  RestTokens)		% consumes ) and {
+	:-
+	catenate(Tag, ':', SizeTag),
+	read_media_size(InterTokens, RestMediaSize, RestTokens).
+
+read_style_body_entries_to(['}' | RestTokens], '}', [], RestTokens)
+	:-!.
+
+read_style_body_entries_to([=,'}' | RestTokens], '}', [], RestTokens)
+	:-!.
+
+read_style_body_entries_to([=,'@media' | InterTokens], '}', MediaEntry, RestTokens)
+	:-
+	read_media_kind(InterTokens, MediaKinds, InterTokens2),		% consumes (
+	read_media_size(InterTokens2, MediaSize, InterTokens3),		% consumes ) and {
+	read_style_body_entries_to(InterTokens3, '}', StyleBodyList, RestTokens),
+	MediaEntry = mediaEntry(MediaKinds, MediaSize, StyleBodyList).
+
+read_style_body_entries_to([=,Tag,':' | InterTokens], '}', [Entry | StyleBodyList], RestTokens)
+	:-
+	read_style_tag_value_list(InterTokens, ValueList, InterTokens2),
+	Entry = style_entry(Tag, ValueList),
+	read_style_body_entries_to(InterTokens2, '}', StyleBodyList, RestTokens).
+
+read_style_body_entries_to([=,Tag,'{' | InterTokens], '}', [Entry | Entries], RestTokens)
+	:-
+	read_style_body_entries_to(InterTokens, '}', Styles, InterTokens2),
+	Entry =.. [Tag, [], Styles],
+	read_style_body_entries_to(InterTokens2, '}', Entries, RestTokens).
+
+read_style_tag_value_list([= | Tokens], [], [= | Tokens])
+	:-!.
+
+read_style_tag_value_list([Token | InterTokens], [Token | RestValueList], RestTokens)
+	:-
+	read_style_tag_value_list(InterTokens, RestValueList, RestTokens).
+
 
 	%%------------------------------------------
 	%% Syntactic roles of tags:
@@ -268,6 +398,8 @@ unary_tag(input).
 unary_tag(frame).
 unary_tag(link).
 %unary_tag(option).
+
+%unary_tag(style).
 
 containing_tag(html, X).
 containing_tag(body, X)
@@ -324,6 +456,8 @@ end_can_terminate(tr, font).
 end_can_terminate(td, font).
 
 end_can_terminate(map, area).
+
+end_can_terminate(style, head).
 
 end_can_terminate(td, X) :- text_appearance_tag(X).
 end_can_terminate(tr, X) :- text_appearance_tag(X).

@@ -47,7 +47,7 @@ export writeXml/3.
 export pml2xml/4.
 export mpml2xml/2.
 export mpml2xml_list/3.
-export fetch_url/2.
+%export fetch_url/2.
 
 /*---------------------------------------------------------------------
  *--------------------------------------------------------------------*/
@@ -236,41 +236,6 @@ macro_expand_body0(2, F, T, NT)
 	macro_expand(B, NB),
 	NT =.. [F, O, NB].
 
-	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	%%%% Input: Fetching Documents
-	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-/*---------------------------------------------------------------------
- *--------------------------------------------------------------------*/
-fetch_url(RequestDescription, Response)
-	:-
-	build_http_request(RequestDescription, HTTP_Request),
-	dmember(host=Host, RequestDescription),
-	(dmember(port=Port, RequestDescription) -> true ; Port = 80),
-	(dmember(timeout=Timeout, RequestDescription) -> true ; default_timeout(Timeout)),
-	nsocket(internet, stream, 0, Socket),
-	open(nsocket(Socket), read, RS, []),
-	open(nsocket(Socket), write, WS, []),
-	nsocket_connect(Socket, Host, Port),
-	write_lines(WS, HTTP_Request),
-	nl(WS),flush_output(WS),
-%	nsocket_select([RS], [], [], [Mark], _, _, Timeout:0),
-%	Mark = set,
-	!,
-	get_lines(RS, Response).
-
-
-build_http_request(RequestDescription, HTTP_Request)
-	:-
-	(dmember(method=Method, RequestDescription) -> true ; Method = 'GET'),
-	dmember(docpath=DocPath, RequestDescription),
-	http_level(HTTPLev),
-	sprintf(atom(HTTP_Request), '%t %t %t',[Method,DocPath,HTTPLev]). 
-
-http_level('HTTP/1.0').
-
-
-default_timeout(300).  %% time in secs
 
 endmod.
 
