@@ -7,8 +7,8 @@ export ffetch_url/4.
 export build_http_request/2.
 export process_raw_page/3.
 export process_raw_page/2.
-export skip_html_header_lines/3.
-export skip_html_header_lines/2.
+export skip_http_header_lines/3.
+export skip_http_header_lines/2.
 export getResponseStatus/2.
 
 /*---------------------------------------------------------------------
@@ -20,7 +20,7 @@ fetch_url(RequestDescription, Response)
 fetch_url(RequestDescription, Response, HeaderLines, Status)
         :-
 	fetch_url_raw(RequestDescription, RawResponse),
-    	skip_html_header_lines(RawResponse, Response, HeaderLines),
+    	skip_http_header_lines(RawResponse, Response, HeaderLines),
 	HeaderLines = [StatusLine | _],
 	getResponseStatus(StatusLine, Status).
 
@@ -77,13 +77,13 @@ dispatch_ffetch_url(InitStatus, InitRequestDescription, InitRawResponse, Respons
 	sub_atom(InitHost, Length, _, 0, Host),
 	RequestDesc = [method=Method,docpath=DocPath,host=Host,port=Port,timeout=Timeout],
 	fetch_url_raw(RequestDesc, RawResponse),
-    	skip_html_header_lines(RawResponse, Response, HeaderLines),
+    	skip_http_header_lines(RawResponse, Response, HeaderLines),
 	HeaderLines = [StatusLine | _],
 	getResponseStatus(StatusLine, Status).
 	
 dispatch_ffetch_url(Status, RequestDescription,  InitRawResponse, Response, HeaderLines, Status)
 	:-
-    	skip_html_header_lines(InitRawResponse, Response, HeaderLines),
+    	skip_http_header_lines(InitRawResponse, Response, HeaderLines),
 	HeaderLines = [StatusLine | _],
 	getResponseStatus(StatusLine, Status).
 
@@ -107,7 +107,7 @@ process_raw_page(RawResponse, PXMLTerms)
 
 process_raw_page(RawResponse, PXMLTerms, HeaderLines)
     :-
-    skip_html_header_lines(RawResponse, RawLines, HeaderLines),
+    skip_http_header_lines(RawResponse, RawLines, HeaderLines),
     read_tokens_lines(RawLines, HTMLPageTokens),
     parse_pxml(HTMLPageTokens, PXMLTerms),
     !.
@@ -116,14 +116,12 @@ process_raw_page(RawResponse, PXMLTerms)
         :-
         write('parse_pxml FAILED'),nl.
 
-skip_html_header_lines([], [], []).
-skip_html_header_lines([L | Ls], [L | Ls], [])
+skip_http_header_lines([], [], []).
+skip_http_header_lines(['' | Ls], Ls, [])
+        :-!.
+skip_http_header_lines([L | Ls], Result, [L | HLs])
         :-
-        sub_atom(L,0,1,_,'<'),
-        !.
-skip_html_header_lines([L | Ls], Result, [L | HLs])
-        :-
-        skip_html_header_lines(Ls, Result, HLs).
+        skip_http_header_lines(Ls, Result, HLs).
 
 getResponseStatus(StatusLine, Status)
     :-
