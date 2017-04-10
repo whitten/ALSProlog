@@ -1,10 +1,8 @@
 libactivate(pxml,[library,http_interface],
     [
-build_http_request/2,
-fetch_url/2,
 fetch_url_raw/2,
-fetch_url/4,
-ffetch_url/4,
+fetch_page/4,
+build_http_request/2,
 process_raw_page/3,
 process_raw_page/2,
 skip_html_header_lines/3,
@@ -12,5 +10,3 @@ skip_html_header_lines/2,
 getResponseStatus/2
 ],
 []).
-
-
